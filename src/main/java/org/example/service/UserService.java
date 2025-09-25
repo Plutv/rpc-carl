@@ -1,4 +1,9 @@
 package org.example.service;
 
-public class UserService {
+import org.example.common.pojo.User;
+
+public interface UserService {
+    User getUserByUserId(Integer id);
+
+    Integer insertUserId(User user);
 }

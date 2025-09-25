@@ -1,4 +1,6 @@
-package org.example.server.server;
+package org.example.Server.server;
 
-public class RpcServer {
+public interface RpcServer {
+    void start(int port);
+    void stop();
 }
