@@ -1,11 +1,11 @@
-package org.example.proxy;
+package org.example.Client.proxy;
 
 import org.example.common.pojo.User;
-import org.example.service.UserService;
+import org.example.common.service.UserService;
 
 public class TestClient {
     public static void main(String[] args) {
-        ClientProxy clientProxy = new ClientProxy("127.0.0.1", 9999);
+        ClientProxy clientProxy = new ClientProxy("127.0.0.1", 9999, 0);
         UserService proxy = clientProxy.getProxy(UserService.class);
 
         User user = proxy.getUserByUserId(1);

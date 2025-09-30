@@ -1,34 +1,24 @@
-package org.example.Server.work;
+package org.example.Server.netty.handler;
 
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
 import lombok.AllArgsConstructor;
 import org.example.Server.provider.ServiceProvider;
 import org.example.common.message.RpcRequest;
 import org.example.common.message.RpcResponse;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.net.Socket;
 
 @AllArgsConstructor
-public class WorkThread implements Runnable {
-    private Socket socket;
+public class NettyServerHandler extends SimpleChannelInboundHandler<RpcRequest> {
     private ServiceProvider serviceProvider;
 
     @Override
-    public void run() {
-        try {
-            ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream());
-            ObjectInputStream ois = new ObjectInputStream(socket.getInputStream());
-            RpcRequest rpcRequest = (RpcRequest) ois.readObject();
-            RpcResponse rpcResponse = getResponse(rpcRequest);
-            oos.writeObject(rpcResponse);
-            oos.flush();
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-        }
+    protected void channelRead0(ChannelHandlerContext channelHandlerContext, RpcRequest rpcRequest) throws Exception {
+        RpcResponse response = getResponse(rpcRequest);
+        channelHandlerContext.writeAndFlush(response);
+        channelHandlerContext.close();
     }
 
     private RpcResponse getResponse(RpcRequest rpcRequest) {

@@ -1,4 +1,4 @@
-package org.example.service;
+package org.example.common.service;
 
 import org.example.common.pojo.User;
 
