@@ -7,6 +7,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.AttributeKey;
+import org.example.Client.serviceCenter.ServiceCenter;
+import org.example.Client.serviceCenter.ZkServiceCenter;
 import org.example.common.message.RpcRequest;
 import org.example.common.message.RpcResponse;
 import org.example.Client.netty.initializer.NettyClientInitializer;
@@ -17,6 +19,13 @@ public class NettyRpcClient implements RpcClient {
     private int port;
     public static final Bootstrap bootstrap;
     public static final EventLoopGroup eventLoopGroup;
+
+    private ServiceCenter serviceCenter;
+
+    public NettyRpcClient() {
+        this.serviceCenter = new ZkServiceCenter();
+    }
+
     public NettyRpcClient(String host, int port) {
         this.host = host;
         this.port = port;

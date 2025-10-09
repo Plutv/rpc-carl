@@ -16,6 +16,10 @@ public class ClientProxy implements InvocationHandler {
 
     private RpcClient rpcClient;
 
+    public ClientProxy() {
+        rpcClient = new NettyRpcClient();
+    }
+
     public ClientProxy(String host, int port, int choose) {
         switch (choose) {
             case 0:
