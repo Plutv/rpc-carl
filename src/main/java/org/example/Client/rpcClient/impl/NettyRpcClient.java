@@ -14,6 +14,8 @@ import org.example.common.message.RpcResponse;
 import org.example.Client.netty.initializer.NettyClientInitializer;
 import org.example.Client.rpcClient.RpcClient;
 
+import java.net.InetSocketAddress;
+
 public class NettyRpcClient implements RpcClient {
     private String host;
     private int port;
@@ -41,6 +43,9 @@ public class NettyRpcClient implements RpcClient {
     @Override
     public RpcResponse sendRequest(RpcRequest rpcRequest) {
         try {
+            InetSocketAddress address = serviceCenter.serviceDiscovery(rpcRequest.getInterfaceName());
+            String host = address.getHostName();
+            int port = address.getPort();
             ChannelFuture channelFuture = bootstrap.connect(host, port).sync();
             Channel channel = channelFuture.channel();
 
