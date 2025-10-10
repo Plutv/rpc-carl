@@ -12,6 +12,9 @@ import lombok.AllArgsConstructor;
 import org.example.Client.netty.handler.NettyClientHandler;
 import org.example.Server.netty.handler.NettyServerHandler;
 import org.example.Server.provider.ServiceProvider;
+import org.example.common.serializer.myCode.MyDecoder;
+import org.example.common.serializer.myCode.MyEncoder;
+import org.example.common.serializer.mySerializer.JsonSerializer;
 
 @AllArgsConstructor
 public class NettyServerInitializer extends ChannelInitializer<SocketChannel> {
@@ -19,15 +22,8 @@ public class NettyServerInitializer extends ChannelInitializer<SocketChannel> {
     @Override
     protected void initChannel(SocketChannel ch) throws Exception {
         ChannelPipeline pipeline = ch.pipeline();
-        pipeline.addLast(new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE,0,4,0,4));
-        pipeline.addLast(new LengthFieldPrepender(4));
-        pipeline.addLast(new ObjectEncoder());
-        pipeline.addLast(new ObjectDecoder(new ClassResolver() {
-            @Override
-            public Class<?> resolve(String s) throws ClassNotFoundException {
-                return Class.forName(s);
-            }
-        }));
+        pipeline.addLast(new MyDecoder());
+        pipeline.addLast(new MyEncoder(new JsonSerializer()));
 
         pipeline.addLast(new NettyServerHandler(serviceProvider));
     }

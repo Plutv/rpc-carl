@@ -11,6 +11,7 @@ public class RpcResponse implements Serializable {
     private int code;
     private String message;
     private Object data;
+    private Class<?> dataType;
 
     public static RpcResponse success(Object data) {
         return RpcResponse.builder().code(200).message("success").data(data).build();
