@@ -1,12 +1,16 @@
 package org.example.common.message;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
 
 @Data
 @Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class RpcResponse implements Serializable {
     private int code;
     private String message;
@@ -14,7 +18,7 @@ public class RpcResponse implements Serializable {
     private Class<?> dataType;
 
     public static RpcResponse success(Object data) {
-        return RpcResponse.builder().code(200).message("success").data(data).build();
+        return RpcResponse.builder().code(200).message("success").dataType(data.getClass()).data(data).build();
     }
 
     public static RpcResponse fail() {
