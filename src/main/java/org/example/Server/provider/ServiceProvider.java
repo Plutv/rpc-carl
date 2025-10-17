@@ -27,13 +27,13 @@ public class ServiceProvider {
         this.interfaceProvider = new HashMap<>();
     }
 
-    public void provideServiceInterface(Object service) {
+    public void provideServiceInterface(Object service, boolean canRetry) {
         String serviceName = service.getClass().getName();
         Class<?>[] interfaceName = service.getClass().getInterfaces();
 
         for(Class<?> clazz:interfaceName) {
             interfaceProvider.put(clazz.getName(), service);
-            serviceRegister.register(clazz.getName(), new InetSocketAddress(host, port));
+            serviceRegister.register(clazz.getName(), new InetSocketAddress(host, port), canRetry);
         }
     }
 

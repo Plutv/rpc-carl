@@ -24,8 +24,8 @@ public class NettyRpcClient implements RpcClient {
 
     private ServiceCenter serviceCenter;
 
-    public NettyRpcClient() throws InterruptedException{
-        this.serviceCenter = new ZkServiceCenter();
+    public NettyRpcClient(ServiceCenter serviceCenter) throws InterruptedException{
+        this.serviceCenter = serviceCenter;
     }
 
     public NettyRpcClient(String host, int port) {

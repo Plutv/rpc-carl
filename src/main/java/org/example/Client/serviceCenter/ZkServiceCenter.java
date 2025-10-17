@@ -5,6 +5,7 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.example.Client.cache.ServiceCache;
+import org.example.Client.serviceCenter.balance.ConsistencyHashBalance;
 import org.example.Client.serviceCenter.zkWatcher.ZkWatcher;
 
 import java.net.InetSocketAddress;
@@ -14,6 +15,7 @@ public class ZkServiceCenter implements ServiceCenter {
     private CuratorFramework client;
 
     private static final String ROOT_PATH = "MyRpc";
+    private static final String RETRY = "CanRetry";
 
     private ServiceCache serviceCache;
 
@@ -35,12 +37,30 @@ public class ZkServiceCenter implements ServiceCenter {
             if (addressList == null) {
                 addressList = client.getChildren().forPath("/" + serviceName);
             }
-            String string = addressList.get(0);
+            String string = new ConsistencyHashBalance().balance(addressList);
             return parseAddress(string);
         } catch (Exception e) {
             e.printStackTrace();
         }
         return null;
+    }
+
+    @Override
+    public boolean checkRetry(String serviceName) {
+        boolean canRetry = false;
+        try {
+            List<String> serviceList = client.getChildren().forPath("/" + RETRY);
+            for(String s : serviceList) {
+                if (s.equals(serviceName)) {
+                    System.out.println("[" + serviceName + "] 在白名单上，可以重试！");
+                    canRetry = true;
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return canRetry;
     }
 
     private String getServiceAddress(InetSocketAddress serverAddress) {
