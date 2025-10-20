@@ -1,9 +1,9 @@
 package org.example.Server.provider;
 
+import org.example.Server.ratelimit.provider.RateLimitProvider;
 import org.example.Server.serviceRegister.ServiceRegister;
 import org.example.Server.serviceRegister.impl.ZKServiceRegister;
 
-import javax.imageio.spi.ServiceRegistry;
 import java.net.InetSocketAddress;
 import java.util.HashMap;
 import java.util.Map;
@@ -16,11 +16,14 @@ public class ServiceProvider {
 
     private ServiceRegister serviceRegister;
 
+    private RateLimitProvider rateLimitProvider;
+
     public ServiceProvider(String host, int port) {
         this.host = host;
         this.port = port;
         this.interfaceProvider = new HashMap<>();
         this.serviceRegister = new ZKServiceRegister();
+        this.rateLimitProvider = new RateLimitProvider();
     }
 
     public ServiceProvider() {
@@ -39,5 +42,9 @@ public class ServiceProvider {
 
     public Object getService(String interfaceName) {
         return interfaceProvider.get(interfaceName);
+    }
+
+    public RateLimitProvider getRateLimitProvider() {
+        return rateLimitProvider;
     }
 }

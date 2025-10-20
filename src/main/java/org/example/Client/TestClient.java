@@ -1,5 +1,6 @@
-package org.example.Client.proxy;
+package org.example.Client;
 
+import org.example.Client.proxy.ClientProxy;
 import org.example.common.pojo.User;
 import org.example.common.service.UserService;
 
