@@ -11,7 +11,7 @@ public class RateLimitProvider {
 
     public RateLimit getRateLimit(String interfaceName) {
         if (!rateLimitMap.containsKey(interfaceName)) {
-            RateLimit rateLimit = new TokenBucketRateLimitImpl(100, 10);
+            RateLimit rateLimit = new TokenBucketRateLimitImpl(100, 100);
             rateLimitMap.put(interfaceName, rateLimit);
             return rateLimit;
         }
