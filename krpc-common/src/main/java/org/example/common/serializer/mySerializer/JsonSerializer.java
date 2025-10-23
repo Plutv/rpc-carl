@@ -49,4 +49,9 @@ public class JsonSerializer implements org.example.common.serializer.mySerialize
     public int getType() {
         return 1;
     }
+
+    @Override
+    public String toString() {
+        return "Json";
+    }
 }

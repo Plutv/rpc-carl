@@ -35,8 +35,7 @@ public class NettyRpcServer implements RpcServer {
         } catch (InterruptedException e) {
             e.printStackTrace();
         } finally {
-            bossGroup.shutdownGracefully();
-            workGroup.shutdownGracefully();
+            shutdown(bossGroup, workGroup);
         }
     }
 
