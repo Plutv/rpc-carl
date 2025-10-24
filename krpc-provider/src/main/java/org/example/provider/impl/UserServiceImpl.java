@@ -11,7 +11,7 @@ public class UserServiceImpl implements UserService {
     public User getUserByUserId(Integer id) {
         System.out.println("查询id: " + id);
         Random random = new Random();
-        User user = User.builder().id(id).username(UUID.randomUUID().toString()).sex(random.nextBoolean()).build();
+        User user = User.builder().id(id).username(UUID.randomUUID().toString()).gender(random.nextBoolean()).build();
         return user;
     }
 

@@ -14,5 +14,5 @@ import java.io.Serializable;
 public class User implements Serializable {
     private Integer id;
     private String username;
-    private Boolean sex;
+    private Boolean gender;
 }

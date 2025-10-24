@@ -19,10 +19,10 @@ public class ConsumerTest {
         ClientProxy clientProxy = new ClientProxy();
         UserService proxy = clientProxy.getProxy(UserService.class);
 
-        for (int i = 0; i < 120; i++) {
+        for (int i = 0; i < 1; i++) {
             Integer i1 = i;
             if (i % 30 == 0) {
-                Thread.sleep(10000);
+                Thread.sleep(1000);
             }
 
             executorService.submit(() -> {
@@ -33,7 +33,7 @@ public class ConsumerTest {
                     } else {
                         log.warn("获取的user为null，userId={}", i1);
                     }
-                    Integer id = proxy.insertUserId(User.builder().id(i1).username("User" + i1).sex(true).build());
+                    Integer id = proxy.insertUserId(User.builder().id(i1).username("User" + i1).gender(true).build());
                     if (id != null) {
                         log.info("插入userId={}", id);
                     } else {

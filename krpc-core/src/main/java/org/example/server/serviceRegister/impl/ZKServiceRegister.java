@@ -1,5 +1,6 @@
 package org.example.server.serviceRegister.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.curator.RetryPolicy;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -9,6 +10,7 @@ import org.example.server.serviceRegister.ServiceRegister;
 
 import java.net.InetSocketAddress;
 
+@Slf4j
 public class ZKServiceRegister implements ServiceRegister {
     private CuratorFramework client;
 
@@ -36,7 +38,7 @@ public class ZKServiceRegister implements ServiceRegister {
                 client.create().creatingParentsIfNeeded().withMode(CreateMode.EPHEMERAL).forPath(path);
             }
         } catch (Exception e) {
-            System.out.println("service existed!");
+            log.error("服务注册失败", e);
         }
     }
 

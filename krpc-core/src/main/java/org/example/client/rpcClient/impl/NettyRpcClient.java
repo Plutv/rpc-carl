@@ -85,7 +85,7 @@ public class NettyRpcClient implements RpcClient {
             // AttributeKey是，线程隔离的，不会由线程安全问题。
             // 当前场景下选择堵塞获取结果
             // 其它场景也可以选择添加监听器的方式来异步获取结果 channelFuture.addListener...
-            AttributeKey<RpcResponse> key = AttributeKey.valueOf("RPCResponse");
+            AttributeKey<RpcResponse> key = AttributeKey.valueOf("RpcResponse");
             RpcResponse response = channel.attr(key).get();
 
             if (response == null) {
@@ -102,7 +102,7 @@ public class NettyRpcClient implements RpcClient {
             log.error("发送请求时发生异常: {}", e.getMessage(), e);
         } finally {
             // 连接断开后，优雅地关闭 Netty 资源
-            shutdown();
+            // shutdown();
         }
         return RpcResponse.fail("请求失败");
     }

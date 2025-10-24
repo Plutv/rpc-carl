@@ -11,6 +11,9 @@ import java.util.List;
 public class MyDecoder extends ByteToMessageDecoder {
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        if (in.readableBytes() < 8) {
+            return;
+        }
         short messageType = in.readShort();
         if (messageType != MessageType.REQUEST.getCode() && messageType != MessageType.RESPONSE.getCode()) {
             System.out.println("not support this message type");

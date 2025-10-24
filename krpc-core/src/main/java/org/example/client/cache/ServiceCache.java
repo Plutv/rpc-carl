@@ -1,12 +1,13 @@
 package org.example.client.cache;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Slf4j
 public class ServiceCache {
-    private static Map<String, List<String>> cache = new HashMap<>();
+    private static Map<String, List<String>> cache = new ConcurrentHashMap<>();
 
     public void addServiceToCache(String serviceName, String address) {
         if (cache.containsKey(serviceName)) {
@@ -32,15 +33,23 @@ public class ServiceCache {
 
     public List<String> getServiceFromCache(String serviceName) {
         if (!cache.containsKey(serviceName)) {
-            return null;
+            log.warn("服务未找到：", serviceName);
+            return Collections.emptyList();
         }
-        List<String> addressList = cache.get(serviceName);
-        return addressList;
+        return cache.get(serviceName);
     }
 
     public void delete(String serviceName, String address) {
         List<String> addressList = cache.get(serviceName);
-        addressList.remove(address);
-        System.out.println("删除本地服务缓存:" + serviceName + " " + address);
+        if (addressList != null && addressList.contains(serviceName)) {
+            addressList.remove(address);
+            log.info("将name为{}和地址为{}的服务从本地缓存中删除", serviceName, address);
+            if (addressList.isEmpty()) {
+                cache.remove(serviceName);
+                log.info("服务{}的地址列表为空，从缓存中清除", serviceName);
+            }
+        } else {
+            log.warn("删除失败，地址不在服务列表中");
+        }
     }
 }

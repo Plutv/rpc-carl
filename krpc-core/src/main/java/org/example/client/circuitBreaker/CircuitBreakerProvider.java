@@ -1,20 +1,19 @@
 package org.example.client.circuitBreaker;
 
-import java.util.HashMap;
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 public class CircuitBreakerProvider {
-    private Map<String, org.example.client.circuitBreaker.CircuitBreaker> circuitBreakerMap = new HashMap<>();
+    private Map<String, CircuitBreaker> circuitBreakerMap = new ConcurrentHashMap<>();
 
-    public org.example.client.circuitBreaker.CircuitBreaker getCircuitBreaker(String serviceName) {
-        org.example.client.circuitBreaker.CircuitBreaker circuitBreaker;
-        if (circuitBreakerMap.containsKey(serviceName)) {
-            circuitBreaker = circuitBreakerMap.get(serviceName);
-        } else {
-            System.out.println("create new circuit breaker");
-            circuitBreaker = new org.example.client.circuitBreaker.CircuitBreaker(1, 0.5, 10000);
-            circuitBreakerMap.put(serviceName, circuitBreaker);
-        }
-        return circuitBreaker;
+    public synchronized CircuitBreaker getCircuitBreaker(String serviceName) {
+        CircuitBreaker circuitBreaker;
+        return circuitBreakerMap.computeIfAbsent(serviceName, key -> {
+            log.info("服务{}不存在熔断器，新建一个熔断器实例", serviceName);
+            return new CircuitBreaker(1, 0.5, 1000);
+        });
     }
 }
