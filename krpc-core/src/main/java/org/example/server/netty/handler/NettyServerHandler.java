@@ -9,6 +9,7 @@ import org.example.server.provider.ServiceProvider;
 import org.example.server.ratelimit.RateLimit;
 import org.example.common.message.RpcRequest;
 import org.example.common.message.RpcResponse;
+import org.example.trace.interceptor.ServerTraceInterceptor;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -24,8 +25,11 @@ public class NettyServerHandler extends SimpleChannelInboundHandler<RpcRequest> 
             log.error("非法请求，request为null");
             return;
         }
+        ServerTraceInterceptor.beforeHandle();
         RpcResponse response = getResponse(rpcRequest);
-        channelHandlerContext.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+        ServerTraceInterceptor.afterHandle(rpcRequest.getMethodName());
+        channelHandlerContext.writeAndFlush(response);
+        channelHandlerContext.close();
     }
 
     private RpcResponse getResponse(RpcRequest rpcRequest) {

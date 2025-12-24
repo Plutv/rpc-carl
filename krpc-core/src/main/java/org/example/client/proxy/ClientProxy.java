@@ -11,6 +11,7 @@ import org.example.common.message.RpcResponse;
 import org.example.client.rpcClient.impl.NettyRpcClient;
 import org.example.client.rpcClient.RpcClient;
 import org.example.client.rpcClient.impl.SimpleSocketRpcClient;
+import org.example.trace.interceptor.ClientTraceInterceptor;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -48,6 +49,7 @@ public class ClientProxy implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        ClientTraceInterceptor.beforeInvoke();
         // 处理 Object 的方法
         if (method.getDeclaringClass() == Object.class) {
             return method.invoke(this, args);
@@ -69,6 +71,7 @@ public class ClientProxy implements InvocationHandler {
         } else {
             response = rpcClient.sendRequest(request);
         }
+        ClientTraceInterceptor.afterInvoke(method.getName());
         return response.getData();
     }
 
