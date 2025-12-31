@@ -1,9 +1,7 @@
 package org.example.client.rpcClient.impl;
 
 import io.netty.bootstrap.Bootstrap;
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.EventLoopGroup;
+import io.netty.channel.*;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.AttributeKey;
@@ -13,8 +11,11 @@ import org.example.common.message.RpcRequest;
 import org.example.common.message.RpcResponse;
 import org.example.client.netty.initializer.NettyClientInitializer;
 import org.example.client.rpcClient.RpcClient;
+import org.example.common.trace.TraceContext;
+import org.slf4j.MDC;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
 
 @Slf4j
 public class NettyRpcClient implements RpcClient {
@@ -63,8 +64,25 @@ public class NettyRpcClient implements RpcClient {
     //     }
     // }
 
+    class MDCChannelHandler extends ChannelOutboundHandlerAdapter {
+        private final Map<String, String> mdcContext;
+
+        public MDCChannelHandler(Map<String, String> mdcContext) {
+            this.mdcContext = mdcContext;
+        }
+
+        @Override
+        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+            if (mdcContext != null) {
+                MDC.setContextMap(mdcContext);
+            }
+            super.write(ctx, msg, promise);
+        }
+    }
+
     @Override
     public RpcResponse sendRequest(RpcRequest request) {
+        Map<String, String> mdcContext = TraceContext.getCopy();
         //从注册中心获取host,post
         InetSocketAddress address = serviceCenter.serviceDiscovery(request.getInterfaceName());
         if (address == null) {
@@ -77,6 +95,7 @@ public class NettyRpcClient implements RpcClient {
             // 连接到远程服务
             ChannelFuture channelFuture = bootstrap.connect(host, port).sync();
             Channel channel = channelFuture.channel();
+            channel.pipeline().addLast(new MDCChannelHandler(mdcContext));
             // 发送数据
             channel.writeAndFlush(request);
             //sync()堵塞获取结果

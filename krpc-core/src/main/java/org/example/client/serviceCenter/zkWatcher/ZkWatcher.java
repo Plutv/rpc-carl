@@ -45,6 +45,7 @@ public class ZkWatcher {
                         break;
                     case NODE_DELETED:
                         String[] pathListDel = parsePath(childData);
+                        // TODO: 存在错误 java.lang.ArrayIndexOutOfBoundsException: 1
                         cache.delete(pathListDel[1], pathListDel[2]);
                         break;
                     default:
