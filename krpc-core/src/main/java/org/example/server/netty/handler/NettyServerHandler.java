@@ -28,8 +28,15 @@ public class NettyServerHandler extends SimpleChannelInboundHandler<RpcRequest> 
         ServerTraceInterceptor.beforeHandle();
         RpcResponse response = getResponse(rpcRequest);
         ServerTraceInterceptor.afterHandle(rpcRequest.getMethodName());
-        channelHandlerContext.writeAndFlush(response);
-        channelHandlerContext.close();
+        channelHandlerContext.writeAndFlush(response);  // .addListener(ChannelFutureListener.CLOSE);
+        // channelHandlerContext.close();
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        // 只有发生异常时，才打印日志并关闭连接
+        cause.printStackTrace();
+        ctx.close();
     }
 
     private RpcResponse getResponse(RpcRequest rpcRequest) {

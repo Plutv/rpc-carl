@@ -7,7 +7,7 @@ public class TokenBucketRateLimitImpl implements org.example.server.ratelimit.Ra
     private volatile int curCapicity;
     private volatile long lastTimeStamp; // 上次请求时间戳
 
-    public TokenBucketRateLimitImpl(int rate, int capicity) {
+    public TokenBucketRateLimitImpl(int capicity, int rate) {
         RATE = rate;
         CAPACITY = capicity;
         curCapicity = capicity;
