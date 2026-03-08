@@ -16,5 +16,6 @@ public class NettyClientInitializer extends ChannelInitializer<SocketChannel> {
         pipeline.addLast(new MyEncoder(new JsonSerializer()));
 
         pipeline.addLast(new NettyClientHandler());
+
     }
 }

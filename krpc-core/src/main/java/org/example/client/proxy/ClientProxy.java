@@ -16,6 +16,7 @@ import org.example.trace.interceptor.ClientTraceInterceptor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.net.InetSocketAddress;
 
 @AllArgsConstructor
 public class ClientProxy implements InvocationHandler {
@@ -33,50 +34,95 @@ public class ClientProxy implements InvocationHandler {
     }
 
     public ClientProxy(String host, int port, int choose) {
+        circuitBreakerProvider = new CircuitBreakerProvider();
         switch (choose) {
             case 0:
-                rpcClient = new NettyRpcClient(host, port);
+                serviceCenter = buildFixedServiceCenter(host, port);
+                try {
+                    rpcClient = new NettyRpcClient(serviceCenter);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Failed to init netty rpc client", e);
+                }
                 break;
             case 1:
                 rpcClient = new SimpleSocketRpcClient(host, port);
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported rpc client type: " + choose);
         }
     }
 
     public ClientProxy(String host, int port) {
-        rpcClient = new NettyRpcClient(host, port);
+        circuitBreakerProvider = new CircuitBreakerProvider();
+        serviceCenter = buildFixedServiceCenter(host, port);
+        try {
+            rpcClient = new NettyRpcClient(serviceCenter);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Failed to init netty rpc client", e);
+        }
     }
 
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         ClientTraceInterceptor.beforeInvoke();
-        // 处理 Object 的方法
         if (method.getDeclaringClass() == Object.class) {
             return method.invoke(this, args);
         }
+
         RpcRequest request = RpcRequest.builder().interfaceName(method.getDeclaringClass().getName())
                 .methodName(method.getName())
                 .params(args)
                 .paramsType(method.getParameterTypes()).build();
 
-        CircuitBreaker circuitBreaker = circuitBreakerProvider.getCircuitBreaker(method.getName());
+        String breakerKey = request.getInterfaceName() + "#" + request.getMethodName();
+        CircuitBreaker circuitBreaker = circuitBreakerProvider.getCircuitBreaker(breakerKey);
 
         if (!circuitBreaker.allowRequest()) {
             return null;
         }
 
-        RpcResponse response;
-        if (serviceCenter.checkRetry(request.getInterfaceName())) {
-            response = new GuavaRetry().sendServiceWithRetry(request, rpcClient);
-        } else {
-            response = rpcClient.sendRequest(request);
+        try {
+            RpcResponse response;
+            if (serviceCenter != null && serviceCenter.checkRetry(request.getInterfaceName())) {
+                response = new GuavaRetry().sendServiceWithRetry(request, rpcClient);
+            } else {
+                response = rpcClient.sendRequest(request);
+            }
+
+            if (response != null && response.getCode() == 200) {
+                circuitBreaker.recordSuccess();
+            } else {
+                circuitBreaker.recordFailure();
+            }
+
+            return response == null ? null : response.getData();
+        } catch (Throwable t) {
+            circuitBreaker.recordFailure();
+            throw t;
+        } finally {
+            ClientTraceInterceptor.afterInvoke(method.getName());
         }
-        ClientTraceInterceptor.afterInvoke(method.getName());
-        return response.getData();
     }
 
     public <T>T getProxy(Class<T> clazz) {
         Object o = Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{clazz}, this);
         return (T)o;
+    }
+
+    private ServiceCenter buildFixedServiceCenter(String host, int port) {
+        return new ServiceCenter() {
+            @Override
+            public InetSocketAddress serviceDiscovery(String serviceName) {
+                return new InetSocketAddress(host, port);
+            }
+
+            @Override
+            public boolean checkRetry(String serviceName) {
+                return false;
+            }
+        };
     }
 }

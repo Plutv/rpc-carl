@@ -9,12 +9,14 @@ public class CircuitBreaker {
     private AtomicInteger requestCount = new AtomicInteger(0);
     private final int failureThreshold;
     private final double halfOpenSuccessRate;
+    private final int halfOpenMinRequestCount;
     private final long resetTimePeriod;
     private long lastFailureTime = 0;
 
-    public CircuitBreaker(int failureThreshold, double halfOpenSuccessRate, long resetTimePeriod) {
+    public CircuitBreaker(int failureThreshold, double halfOpenSuccessRate, int halfOpenMinRequestCount, long resetTimePeriod) {
         this.failureThreshold = failureThreshold;
         this.halfOpenSuccessRate = halfOpenSuccessRate;
+        this.halfOpenMinRequestCount = halfOpenMinRequestCount;
         this.resetTimePeriod = resetTimePeriod;
     }
 
@@ -25,6 +27,7 @@ public class CircuitBreaker {
                 if (currentTime - lastFailureTime > resetTimePeriod) {
                     state = CircuitBreakerState.HALF_OPEN;
                     resetCounts();
+                    requestCount.incrementAndGet();
                     return true;
                 }
                 return false;
@@ -40,7 +43,9 @@ public class CircuitBreaker {
     public synchronized void recordSuccess() {
         if (state == CircuitBreakerState.HALF_OPEN) {
             successCount.incrementAndGet();
-            if (successCount.get() >= halfOpenSuccessRate * requestCount.get()) {
+            int currentRequestCount = requestCount.get();
+            if (currentRequestCount >= halfOpenMinRequestCount
+                    && (double) successCount.get() / currentRequestCount >= halfOpenSuccessRate) {
                 state = CircuitBreakerState.CLOSED;
                 resetCounts();
             }
@@ -54,7 +59,7 @@ public class CircuitBreaker {
         lastFailureTime = System.currentTimeMillis();
         if (state == CircuitBreakerState.HALF_OPEN) {
             state = CircuitBreakerState.OPEN;
-        } else if (failureCount.get() > failureThreshold) {
+        } else if (failureCount.get() >= failureThreshold) {
             state = CircuitBreakerState.OPEN;
         }
     }
