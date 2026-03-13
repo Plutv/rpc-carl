@@ -20,7 +20,7 @@ public class ProtobufSerializer implements Serializer {
     // 0 可能被 JSON 或 Java 原生占用
     @Override
     public int getType() {
-        return 1;
+        return 3;
     }
 
     @Override

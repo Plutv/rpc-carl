@@ -15,6 +15,7 @@ public interface Serializer {
         serializerMap.put(0, new ObjectSerializer());
         serializerMap.put(1, new JsonSerializer());
         serializerMap.put(2, new HessianSerializer());
+        serializerMap.put(3, new ProtobufSerializer());
         return serializerMap.get(code);
     }
 }
