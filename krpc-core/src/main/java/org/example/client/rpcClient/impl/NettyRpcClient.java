@@ -100,21 +100,21 @@ public class NettyRpcClient implements RpcClient {
     //     }
     // }
 
-    class MDCChannelHandler extends ChannelOutboundHandlerAdapter {
-        private final Map<String, String> mdcContext;
+    // class MDCChannelHandler extends ChannelOutboundHandlerAdapter {
+    //     private final Map<String, String> mdcContext;
 
-        public MDCChannelHandler(Map<String, String> mdcContext) {
-            this.mdcContext = mdcContext;
-        }
+    //     public MDCChannelHandler(Map<String, String> mdcContext) {
+    //         this.mdcContext = mdcContext;
+    //     }
 
-        @Override
-        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-            if (mdcContext != null) {
-                MDC.setContextMap(mdcContext);
-            }
-            super.write(ctx, msg, promise);
-        }
-    }
+    //     @Override
+    //     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+    //         if (mdcContext != null) {
+    //             MDC.setContextMap(mdcContext);
+    //         }
+    //         super.write(ctx, msg, promise);
+    //     }
+    // }
 
     @Override
     public RpcResponse sendRequest(RpcRequest request) {
