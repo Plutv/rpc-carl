@@ -4,16 +4,15 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.recipes.cache.ChildData;
 import org.apache.curator.framework.recipes.cache.CuratorCache;
 import org.apache.curator.framework.recipes.cache.CuratorCacheListener;
-import org.example.client.cache.ServiceCache;
 
 public class ZkWatcher {
     private CuratorFramework client;
 
-    private ServiceCache cache;
+    private final ServiceChangeListener listener;
 
-    public ZkWatcher(CuratorFramework client, ServiceCache cache) {
+    public ZkWatcher(CuratorFramework client, ServiceChangeListener listener) {
         this.client = client;
-        this.cache = cache;
+        this.listener = listener;
     }
 
     public void watchToUpdate(String path) throws InterruptedException{
@@ -22,31 +21,30 @@ public class ZkWatcher {
             @Override
             public void event(Type type, ChildData childData, ChildData childData1) {
                 switch (type) {
-                    case NODE_CREATED:
+                    case NODE_CREATED: {
                         String[] pathList = parsePath(childData1);
-                        if (pathList.length <= 2) break;
-                        else {
+                        if (pathList.length > 2) {
                             String serviceName = pathList[1];
                             String address = pathList[2];
-                            cache.addServiceToCache(serviceName, address);
+                            listener.onAdd(serviceName, address);
                         }
                         break;
-                    case NODE_CHANGED:
-                        if (childData.getData() != null) {
-                            System.out.println("change before: " + childData.getData());
-                        } else {
-                            System.out.println("first assignment.");
-                        }
-                        // TODO: 判断 null
+                    }
+                    case NODE_CHANGED: {
                         String[] oldPathList = parsePath(childData);
                         String[] newPathList = parsePath(childData1);
-                        cache.replaceServiceAddress(oldPathList[1], oldPathList[2], newPathList[2]);
-                        System.out.println("change after: " + childData1.getData());
+                        if (oldPathList.length > 2 && newPathList.length > 2) {
+                            listener.onReplace(oldPathList[1], oldPathList[2], newPathList[2]);
+                        }
                         break;
-                    case NODE_DELETED:
+                    }
+                    case NODE_DELETED: {
                         String[] pathListDel = parsePath(childData);
-                        cache.delete(pathListDel[1], pathListDel[2]);
+                        if (pathListDel.length > 2) {
+                            listener.onRemove(pathListDel[1], pathListDel[2]);
+                        }
                         break;
+                    }
                     default:
                         break;
                 }
@@ -56,7 +54,10 @@ public class ZkWatcher {
     }
 
     private String[] parsePath(ChildData childData) {
-        String path = new String(childData.getData());
-        return path.split("/");
+        if (childData == null || childData.getPath() == null) {
+            return new String[0];
+        }
+        // curator 的 path 形如: /ServiceName/host:port
+        return childData.getPath().split("/");
     }
 }

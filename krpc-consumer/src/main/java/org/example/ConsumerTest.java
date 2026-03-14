@@ -19,10 +19,10 @@ public class ConsumerTest {
         ClientProxy clientProxy = new ClientProxy();
         UserService proxy = clientProxy.getProxy(UserService.class);
 
-        for (int i = 0; i < 1; i++) {
+        for (int i = 0; i < 100; i++) {
             Integer i1 = i;
             if (i % 30 == 0) {
-                Thread.sleep(1000);
+                Thread.sleep(3000);
             }
 
             executorService.submit(() -> {

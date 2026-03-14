@@ -43,7 +43,8 @@ public class ZKServiceRegister implements ServiceRegister {
     }
 
     private String getServiceAddress(InetSocketAddress serviceAddress) {
-        return serviceAddress.getHostName() + ":" + serviceAddress.getPort();
+        // 解决域名解析错误
+        return serviceAddress.getHostString() + ":" + serviceAddress.getPort();
     }
 
     private InetSocketAddress parseAddress(String address) {

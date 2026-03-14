@@ -26,9 +26,14 @@ public class ConsistencyHashBalance implements org.example.client.serviceCenter.
     }
 
     public String getServer(String node, List<String> serviceList) {
-        if (shards.isEmpty()) {
+        // 每次请求时，检查当前的节点列表与内部维护的 realNodes 是否一致
+        // 如果节点数量发生变化，或者具体节点内容发生变化，则重新构建哈希环
+        if (serviceList.size() != realNodes.size() || !new HashSet<>(serviceList).containsAll(realNodes)) {
+            shards.clear();
+            realNodes.clear();
             init(serviceList);
         }
+
         int hash = getHash(node);
 
         Integer key = null;
@@ -67,7 +72,7 @@ public class ConsistencyHashBalance implements org.example.client.serviceCenter.
 
     @Override
     public void delNode(String node) {
-        if (!realNodes.contains(node)) {
+        if (realNodes.contains(node)) {
             realNodes.remove(node);
             System.out.println("real node [" + node + "] removed !");
             for (int i = 0; i < VITUAL_NUM; i++) {

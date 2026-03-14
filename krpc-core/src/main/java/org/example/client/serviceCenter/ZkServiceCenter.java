@@ -7,11 +7,13 @@ import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.example.client.cache.ServiceCache;
 import org.example.client.serviceCenter.balance.ConsistencyHashBalance;
-import org.example.client.serviceCenter.balance.LoadBalance;
+import org.example.client.serviceCenter.zkWatcher.ServiceChangeListener;
 import org.example.client.serviceCenter.zkWatcher.ZkWatcher;
 
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 public class ZkServiceCenter implements ServiceCenter {
@@ -20,9 +22,12 @@ public class ZkServiceCenter implements ServiceCenter {
     private static final String ROOT_PATH = "MyRpc";
     private static final String RETRY = "CanRetry";
 
-    private ServiceCache serviceCache;
+    private final ServiceCache serviceCache;
 
-    private final LoadBalance loadBalance = new ConsistencyHashBalance();
+    /**
+     * 每个 serviceName 维护一套一致性哈希环，避免不同服务的节点混到同一个环里。
+     */
+    private final Map<String, ConsistencyHashBalance> balanceMap = new ConcurrentHashMap<>();
 
     public ZkServiceCenter() throws InterruptedException {
         RetryPolicy policy = new ExponentialBackoffRetry(1000, 3);
@@ -30,8 +35,28 @@ public class ZkServiceCenter implements ServiceCenter {
                 sessionTimeoutMs(40000).retryPolicy(policy).namespace(ROOT_PATH).build();
         this.client.start();
         System.out.println("zookeeper 连接成功");
+
         this.serviceCache = new ServiceCache();
-        ZkWatcher zkWatcher = new ZkWatcher(client, serviceCache);
+
+        // watcher 只负责通知变化；由 ZkServiceCenter 统一协调更新 cache + hash ring
+        ServiceChangeListener listener = new ServiceChangeListener() {
+            @Override
+            public void onAdd(String serviceName, String address) {
+                serviceCache.addServiceToCache(serviceName, address);
+                balanceMap.computeIfAbsent(serviceName, k -> new ConsistencyHashBalance()).addNode(address);
+            }
+
+            @Override
+            public void onRemove(String serviceName, String address) {
+                serviceCache.delete(serviceName, address);
+                ConsistencyHashBalance balance = balanceMap.get(serviceName);
+                if (balance != null) {
+                    balance.delNode(address);
+                }
+            }
+        };
+
+        ZkWatcher zkWatcher = new ZkWatcher(client, listener);
         zkWatcher.watchToUpdate(ROOT_PATH);
     }
 
@@ -44,9 +69,16 @@ public class ZkServiceCenter implements ServiceCenter {
                 for (String address : addressList) {
                     serviceCache.addServiceToCache(serviceName, address);
                 }
+                // 初始化该服务对应的哈希环（首次发现时）
+                ConsistencyHashBalance balance = balanceMap.computeIfAbsent(serviceName, k -> new ConsistencyHashBalance());
+                for (String address : addressList) {
+                    balance.addNode(address);
+                }
             }
-            String string = loadBalance.balance(addressList);
-            return parseAddress(string);
+
+            ConsistencyHashBalance balance = balanceMap.computeIfAbsent(serviceName, k -> new ConsistencyHashBalance());
+            String picked = balance.balance(addressList);
+            return parseAddress(picked);
         } catch (Exception e) {
             log.error("服务发现失败，服务名{}", serviceName, e);
         }
