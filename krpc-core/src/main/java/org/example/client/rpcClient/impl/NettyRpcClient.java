@@ -3,71 +3,48 @@ package org.example.client.rpcClient.impl;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelOutboundHandlerAdapter;
-import io.netty.channel.ChannelPromise;
+import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import io.netty.util.AttributeKey;
 import lombok.extern.slf4j.Slf4j;
+import org.example.client.netty.PendingRequests;
 import org.example.client.netty.initializer.NettyClientInitializer;
 import org.example.client.rpcClient.RpcClient;
 import org.example.client.serviceCenter.ServiceCenter;
 import org.example.common.message.RpcRequest;
 import org.example.common.message.RpcResponse;
 import org.example.common.trace.TraceContext;
-import org.slf4j.MDC;
 
 import java.net.InetSocketAddress;
-import java.util.Map;
+import java.util.Arrays;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 public class NettyRpcClient implements RpcClient {
+    private static final long REQUEST_TIMEOUT_MILLIS = 5000L;
+
     private String host;
     private int port;
+
     public static final Bootstrap bootstrap;
     public static final EventLoopGroup eventLoopGroup;
+    private static final ConcurrentMap<String, Channel> CHANNEL_CACHE = new ConcurrentHashMap<>();
 
     private ServiceCenter serviceCenter;
 
-    public NettyRpcClient(ServiceCenter serviceCenter) throws InterruptedException {
+    public NettyRpcClient(ServiceCenter serviceCenter) {
         this.serviceCenter = serviceCenter;
     }
 
     public NettyRpcClient(String host, int port) {
         this.host = host;
         this.port = port;
-    }
-
-    class MDCChannelHandler extends ChannelOutboundHandlerAdapter {
-        private final Map<String, String> mdcContext;
-
-        public MDCChannelHandler(Map<String, String> mdcContext) {
-            this.mdcContext = mdcContext;
-        }
-
-        @Override
-        public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-            if (mdcContext != null) {
-                MDC.setContextMap(mdcContext);
-            }
-            super.write(ctx, msg, promise);
-        }
-
-//        @Override
-//        public void channelActive(ChannelHandlerContext ctx) throws Exception {
-//            if (mdcContext != null) {
-//                MDC.setContextMap(mdcContext);
-//            }
-//            super.channelActive(ctx);
-//        }
-//
-//        @Override
-//        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
-//            MDC.clear();
-//            super.channelInactive(ctx);
-//        }
     }
 
     static {
@@ -78,104 +55,114 @@ public class NettyRpcClient implements RpcClient {
                 .handler(new NettyClientInitializer());
     }
 
-    // @Override
-    // public RpcResponse sendRequest(RpcRequest rpcRequest) {
-    //     try {
-    //         InetSocketAddress address = serviceCenter.serviceDiscovery(rpcRequest.getInterfaceName());
-    //         String host = address.getHostName();
-    //         int port = address.getPort();
-    //         ChannelFuture channelFuture = bootstrap.connect(host, port).sync();
-    //         Channel channel = channelFuture.channel();
-    //
-    //         channel.writeAndFlush(rpcRequest);
-    //
-    //         channel.closeFuture().sync();
-    //         AttributeKey<RpcResponse> key = AttributeKey.valueOf("RpcResponse");
-    //         RpcResponse response = channel.attr(key).get();
-    //         System.out.println(response);
-    //         return response;
-    //     } catch (InterruptedException e) {
-    //         e.printStackTrace();
-    //         return null;
-    //     }
-    // }
-
-    // class MDCChannelHandler extends ChannelOutboundHandlerAdapter {
-    //     private final Map<String, String> mdcContext;
-
-    //     public MDCChannelHandler(Map<String, String> mdcContext) {
-    //         this.mdcContext = mdcContext;
-    //     }
-
-    //     @Override
-    //     public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
-    //         if (mdcContext != null) {
-    //             MDC.setContextMap(mdcContext);
-    //         }
-    //         super.write(ctx, msg, promise);
-    //     }
-    // }
-
     @Override
     public RpcResponse sendRequest(RpcRequest request) {
-        Map<String, String> mdcContext = TraceContext.getCopy();
-        // Resolve the target endpoint from the registry or the fixed host/port.
-        InetSocketAddress address;
-        if (serviceCenter != null) {
-            address = serviceCenter.serviceDiscovery(request.getInterfaceName());
-        } else if (host != null && !host.isEmpty() && port > 0) {
-            address = new InetSocketAddress(host, port);
-        } else {
-            log.error("No available serviceCenter or fixed address for request: {}", request.getInterfaceName());
-            return RpcResponse.fail("No available serviceCenter or fixed address");
+        if (request.getTraceId() == null || request.getTraceId().isEmpty()) {
+            request.setTraceId(TraceContext.getTraceId());
+        }
+        if (request.getSpanId() == null || request.getSpanId().isEmpty()) {
+            request.setSpanId(TraceContext.getSpanId());
         }
 
+        String requestId = UUID.randomUUID().toString();
+        request.setRequestId(requestId);
+
+        InetSocketAddress address = resolveAddress(request);
         if (address == null) {
-            log.error("Service discovery returned null address for request: {}", request.getInterfaceName());
             return RpcResponse.fail("Service discovery returned null address");
         }
 
-        String host = address.getHostName();
-        int port = address.getPort();
+        CompletableFuture<RpcResponse> responseFuture = new CompletableFuture<>();
+        PendingRequests.put(requestId, responseFuture);
+
         try {
-            // Connect to the remote provider.
-            ChannelFuture channelFuture = bootstrap.connect(host, port).sync();
-            Channel channel = channelFuture.channel();
-            channel.pipeline().addLast(new MDCChannelHandler(mdcContext));
+            Channel channel = getOrCreateChannel(address);
+            ChannelFuture writeFuture = channel.writeAndFlush(request);
+            writeFuture.addListener((ChannelFutureListener) future -> {
+                if (!future.isSuccess()) {
+                    if (serviceCenter != null) {
+                        serviceCenter.markNodeAsDown(request.getInterfaceName(), address);
+                    }
+                    PendingRequests.fail(requestId, future.cause());
+                }
+            });
 
-            // Send the RPC request.
-            channel.writeAndFlush(request);
-
-            // Wait until the channel is closed so the response can be attached.
-            channel.closeFuture().sync();
-
-            // The inbound handler stores the RpcResponse on the channel attribute.
-            // Read it back after the channel is closed.
-            // If later you want non-blocking behavior, replace this flow with channelFuture listeners.
-            AttributeKey<RpcResponse> key = AttributeKey.valueOf("RpcResponse");
-            RpcResponse response = channel.attr(key).get();
-
-            if (response == null) {
-                log.error("rpc response is null, request may have failed or timed out");
-                return RpcResponse.fail("rpc response is null");
+            RpcResponse response = responseFuture.get(REQUEST_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            if (response != null && response.getCode() == 200 && serviceCenter != null) {
+                serviceCenter.markNodeAsUp(request.getInterfaceName(), address);
             }
-
-            log.info("rpc response received: {}", response);
             return response;
+        } catch (TimeoutException e) {
+            log.error("rpc request timeout, requestId={}, service={}", requestId, request.getInterfaceName());
+            PendingRequests.remove(requestId);
+            if (serviceCenter != null) {
+                serviceCenter.markNodeAsDown(request.getInterfaceName(), address);
+            }
+            return RpcResponse.fail("rpc request timeout");
         } catch (InterruptedException e) {
             log.error("rpc request was interrupted: {}", e.getMessage(), e);
+            PendingRequests.remove(requestId);
             Thread.currentThread().interrupt();
+            return RpcResponse.fail("rpc request interrupted");
         } catch (Exception e) {
             log.error("rpc request failed: {}", e.getMessage(), e);
-        } finally {
-            // Keep the shared Netty client alive instead of shutting it down per request.
-            // shutdown();
+            PendingRequests.remove(requestId);
+            if (serviceCenter != null) {
+                serviceCenter.markNodeAsDown(request.getInterfaceName(), address);
+            }
+            return RpcResponse.fail("rpc request failed");
         }
-        return RpcResponse.fail("rpc request failed");
+    }
+
+    private InetSocketAddress resolveAddress(RpcRequest request) {
+        if (serviceCenter != null) {
+            InetSocketAddress address = serviceCenter.serviceDiscovery(request.getInterfaceName(), buildRequestKey(request));
+            if (address == null) {
+                log.error("Service discovery returned null for interface={}", request.getInterfaceName());
+            }
+            return address;
+        }
+
+        if (host != null && !host.isEmpty() && port > 0) {
+            return new InetSocketAddress(host, port);
+        }
+
+        log.error("No available serviceCenter or fixed address for request: {}", request.getInterfaceName());
+        return null;
+    }
+
+    private String buildRequestKey(RpcRequest request) {
+        Object[] params = request.getParams() == null ? new Object[0] : request.getParams();
+        return request.getInterfaceName() + "#" + request.getMethodName() + "#" + Arrays.deepHashCode(params);
+    }
+
+    private Channel getOrCreateChannel(InetSocketAddress address) throws InterruptedException {
+        String channelKey = address.getHostString() + ":" + address.getPort();
+        Channel cachedChannel = CHANNEL_CACHE.get(channelKey);
+        if (isChannelAvailable(cachedChannel)) {
+            return cachedChannel;
+        }
+
+        synchronized (CHANNEL_CACHE) {
+            cachedChannel = CHANNEL_CACHE.get(channelKey);
+            if (isChannelAvailable(cachedChannel)) {
+                return cachedChannel;
+            }
+
+            Channel channel = bootstrap.connect(address.getHostString(), address.getPort()).sync().channel();
+            CHANNEL_CACHE.put(channelKey, channel);
+            channel.closeFuture().addListener((ChannelFutureListener) future ->
+                    CHANNEL_CACHE.remove(channelKey, channel));
+            return channel;
+        }
+    }
+
+    private boolean isChannelAvailable(Channel channel) {
+        return channel != null && channel.isActive();
     }
 
     // Shut down the shared Netty event loop when the client is no longer needed.
-    private void shutdown() {
+    public static void shutdown() {
         try {
             if (eventLoopGroup != null) {
                 eventLoopGroup.shutdownGracefully().sync();

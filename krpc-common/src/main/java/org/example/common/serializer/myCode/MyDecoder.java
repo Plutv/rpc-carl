@@ -7,40 +7,86 @@ import org.example.common.message.MessageType;
 import org.example.common.serializer.mySerializer.Serializer;
 import org.example.common.trace.TraceContext;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class MyDecoder extends ByteToMessageDecoder {
+    private static final short MAGIC = (short) 0xCAFE;
+    private static final byte VERSION = 1;
+    private static final int MAGIC_BYTES = 2;
+    private static final int VERSION_BYTES = 1;
+    private static final int INT_BYTES = 4;
+    private static final int SHORT_BYTES = 2;
+    private static final int MIN_FIXED_LENGTH = SHORT_BYTES + SHORT_BYTES + INT_BYTES;
+    private static final int MIN_FRAME_HEADER = MAGIC_BYTES + VERSION_BYTES + INT_BYTES + MIN_FIXED_LENGTH;
+
     @Override
-    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
-        if (in.readableBytes() < 12) {
+    protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
+        if (in.readableBytes() < MIN_FRAME_HEADER) {
             return;
         }
 
+        in.markReaderIndex();
+
+        short magic = in.readShort();
+        if (magic != MAGIC) {
+            throw new IllegalArgumentException("Invalid magic: " + magic);
+        }
+
+        byte version = in.readByte();
+        if (version != VERSION) {
+            throw new IllegalArgumentException("Unsupported protocol version: " + version);
+        }
+
         int traceLength = in.readInt();
+        if (traceLength < 0) {
+            throw new IllegalArgumentException("traceLength is negative");
+        }
+
+        if (in.readableBytes() < traceLength + MIN_FIXED_LENGTH) {
+            in.resetReaderIndex();
+            return;
+        }
+
         byte[] traceBytes = new byte[traceLength];
         in.readBytes(traceBytes);
-        serializeTraceMsg(traceBytes);
+        deserializeTraceMsg(traceBytes);
 
         short messageType = in.readShort();
         if (messageType != MessageType.REQUEST.getCode() && messageType != MessageType.RESPONSE.getCode()) {
-            System.out.println("not support this message type");
+            throw new IllegalArgumentException("Unsupported message type: " + messageType);
         }
+
         short serializerType = in.readShort();
         Serializer serializer = Serializer.getSerializerByCode(serializerType);
         if (serializer == null) {
-            throw new RuntimeException("not exists corresponding serializer!");
+            throw new IllegalArgumentException("No serializer for type: " + serializerType);
         }
-        int length = in.readInt();
-        byte[] bytes = new byte[length];
-        in.readBytes(bytes);
-        Object deserialize = serializer.deserializer(bytes, messageType);
+
+        int bodyLength = in.readInt();
+        if (bodyLength < 0) {
+            throw new IllegalArgumentException("bodyLength is negative");
+        }
+
+        if (in.readableBytes() < bodyLength) {
+            in.resetReaderIndex();
+            return;
+        }
+
+        byte[] bodyBytes = new byte[bodyLength];
+        in.readBytes(bodyBytes);
+        Object deserialize = serializer.deserializer(bodyBytes, messageType);
         out.add(deserialize);
     }
 
-    private void serializeTraceMsg(byte[] bytes) {
-        String traceMsg = new String(bytes);
-        String[] msgs = traceMsg.split(";");
-        if(!msgs[0].equals("")) TraceContext.setTraceId(msgs[0]);
-        if(!msgs[1].equals("")) TraceContext.setParentSpanId(msgs[1]);
+    private void deserializeTraceMsg(byte[] bytes) {
+        String traceMsg = new String(bytes, StandardCharsets.UTF_8);
+        String[] msgs = traceMsg.split(";", -1);
+        if (msgs.length > 0 && !msgs[0].isEmpty()) {
+            TraceContext.setTraceId(msgs[0]);
+        }
+        if (msgs.length > 1 && !msgs[1].isEmpty()) {
+            TraceContext.setParentSpanId(msgs[1]);
+        }
     }
 }
